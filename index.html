@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ياتزي برو 3D 🎲🔊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root {
+            --primary-orange: #f59e0b; /* أصفر ذهبي أكثر دفئًا */
+            --light-blue: #e0f2fe;
+            --dark-text: #1e293b; /* رمادي داكن أكثر للنص */
+            --light-bg: #f8fafc;    /* أبيض مائل للرمادي للخلفية */
+            --dice-bg: #f8f8f8;
+            --dice-dot: #171717; /* أسود أكثر للنقاط */
+            --held-dice-bg: #fee2e2; /* أحمر فاتح عند التثبيت */
+            --button-bg: #ea580c;
+            --button-text: #ffffff;
+            --score-text: #b45309;   /* بني محمر للنقاط */
+            --selected-category-outline: #fbbf24; /* أصفر كهرماني */
+            --player1-color: #2563eb;
+            --player2-color: #16a34a;
+        }
+        body {
+            font-family: 'Cairo', sans-serif; background-color: var(--light-bg);
+            color: var(--dark-text); display: flex; flex-direction: column;
+            align-items: center; padding: 6px 3px; min-height: 100vh;
+            touch-action: manipulation;
+        }
+        .game-wrapper {
+            width: 100%; max-width: 390px; /* تعديل العرض قليلاً */
+            background-color: #e7e5e4; /* خلفية رمادية فاتحة للحاوية الرئيسية */
+            padding: 10px;
+            border-radius: 16px;
+            box-shadow: 0px 10px 20px rgba(0,0,0,0.15), 0px 3px 8px rgba(0,0,0,0.1);
+        }
+        .header-info {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px; padding: 0 2px;
+        }
+        .exit-button, .current-player-display, .current-round-display {
+            background-image: linear-gradient(to bottom, var(--button-bg), #d9480f);
+            color: var(--button-text); padding: 6px 9px; border-radius: 16px;
+            font-size: 0.8em; font-weight: bold;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.25), inset 0 -2px 1px rgba(0,0,0,0.15), inset 0 1px 0px rgba(255,255,255,0.2);
+            border: 1px solid rgba(0,0,0,0.1);
+            text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+        }
+        .current-player-display.player1 { background-image: linear-gradient(to bottom, var(--player1-color), #1d4ed8); }
+        .current-player-display.player2 { background-image: linear-gradient(to bottom, var(--player2-color), #15803d); }
+
+        .scorecard-container {
+            background-color: #f5f5f4; /* أبيض مائل للرمادي لجدول النقاط */
+            padding: 6px; border-radius: 10px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+        }
+        .scorecard-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 3px; }
+        .score-item {
+            background-color: var(--light-blue); border: 1px solid #a5f3fc; /* حدود أفتح */
+            border-radius: 4px; padding: 4px 2px; display: flex;
+            align-items: center; justify-content: center; text-align: center;
+            min-height: 42px; cursor: default; transition: all 0.15s ease-out;
+            position: relative;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.7);
+        }
+        .score-item.category-name-cell {
+            justify-content: flex-start; padding-right: 6px; font-weight: bold;
+            font-size: 0.65em; background-color: #e7e5e4; /* نفس لون الحاوية لأسماء الفئات */
+            color: var(--dark-text); border-color: #d6d3d1;
+        }
+        .score-item.category-name-cell i { font-size: 1em; margin-left: 3px; color: var(--primary-orange); }
+
+        .score-item.player-score-cell {
+            background-color: #fafafa; color: var(--score-text);
+            font-weight: bold; font-size: 0.85em; cursor: pointer;
+        }
+        .score-item.player-score-cell.scored {
+            background-color: #fee2e2 !important; color: #ef4444; /* أحمر واضح للنص المسجل */
+            opacity: 0.8; box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .score-item.player-score-cell.potential:not(.scored):hover {
+            background-color: #fef9c3 !important; transform: translateY(-1px) scale(1.02);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.7);
+        }
+        .score-item.player-score-cell.selected-for-play {
+            outline: 2px solid var(--selected-category-outline) !important; outline-offset: 0px;
+            box-shadow: 0 0 8px var(--selected-category-outline), inset 0 0 3px rgba(255,220,130,0.5) !important;
+            background-color: #fef3c7 !important; transform: scale(1.03);
+        }
+        .potential-score-text { /* نص النقاط المحتملة */
+            font-size: 0.75em; color: #78716c; opacity: 1; font-weight: normal;
+        }
+
+        .bonus-section { /* ... نفس التنسيق مع تعديل الألوان إذا لزم الأمر ... */
+            grid-column: span 3; display: grid; grid-template-columns: 1fr 1fr;
+            gap: 4px; padding: 6px 0; margin-top: 3px; background-color: #e7e5e4;
+            border-radius: 5px;
+        }
+        .bonus-header { grid-column: span 2; text-align:center; font-size: 0.75em; font-weight:bold; padding-bottom: 2px;}
+        .bonus-player-section { display: flex; flex-direction:column; align-items:center; font-size: 0.7em; }
+        .bonus-player-section div { margin-bottom: 1px; }
+        .bonus-player-section span { font-weight: bold; color: var(--score-text); font-size: 1.1em;}
+
+
+        .dice-area { display: flex; justify-content: space-around; margin-bottom: 10px; }
+        .die {
+            width: 42px; height: 42px; /* تصغير النرد أكثر */
+            background-image: linear-gradient(to bottom right, #ffffff, #e0e0e0);
+            border: 1px solid #bababa; border-radius: 6px; display: flex;
+            align-items: center; justify-content: center; cursor: pointer;
+            transition: all 0.15s cubic-bezier(0.68, -0.55, 0.27, 1.55); /* انتقال مع تأثير ارتداد */
+            box-shadow: 2px 2px 3px rgba(0,0,0,0.2), -1px -1px 2px rgba(255,255,255,0.8), inset 0 0 3px rgba(255,255,255,0.5);
+        }
+        .die i {
+            font-size: 1.6em; color: var(--dice-dot);
+            text-shadow: 0.5px 0.5px 0.5px rgba(255,255,255,0.7); /* ظل خفيف للنقاط لتبدو غائرة */
+        }
+        .die.held {
+            background-image: linear-gradient(to bottom right, var(--held-dice-bg), #fdd8a5);
+            transform: scale(0.92) translateY(2px) rotate(-3deg); /* تأثير تثبيت مائل */
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.25), 0px 0px 1px rgba(0,0,0,0.1);
+        }
+        .die.rolling { /* لإضافة تأثير دوران عند الرمي */
+            animation: rollDieAnim 0.3s ease-out;
+        }
+        @keyframes rollDieAnim {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.1); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+
+
+        .roll-play-area {
+            display: flex; justify-content: space-between; align-items: center;
+            background-image: linear-gradient(to bottom, var(--button-bg), #d9480f);
+            padding: 6px 8px; border-radius: 10px; /* استدارة أكبر */
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3), inset 0 -2px 2px rgba(0,0,0,0.2), inset 0 1px 0px rgba(255,255,255,0.25);
+        }
+        #rollButton, #playButton {
+            background-color: transparent; color: var(--button-text); font-size: 1.1em; /* تصغير الخط قليلاً */
+            font-weight: bold; border: none; padding: 3px 6px; cursor: pointer;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        #rollButton:disabled, #playButton:disabled { opacity: 0.5; cursor: not-allowed; }
+        .roll-counts { display: flex; }
+        .roll-count-indicator {
+            width: 20px; height: 20px; background-color: rgba(255,255,255,0.2);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            margin: 0 2px; color: var(--button-text); font-weight: bold; font-size: 0.75em;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .roll-count-indicator.active {
+            background-color: var(--button-text); color: var(--button-bg);
+            box-shadow: 0 0 5px rgba(255,255,255,0.7), inset 0 0 2px var(--button-bg);
+        }
+
+        .total-score-display-container { /* ... نفس التنسيق ... */ }
+        .player-total-score { /* ... نفس التنسيق ... */ }
+        #finalMessage { /* ... نفس التنسيق ... */ }
+
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="header-info">
+            <div class="exit-button" id="exitBtn">EXIT</div>
+            <div class="current-player-display player1" id="currentPlayerTurn">دور اللاعب 1</div>
+            <div class="current-round-display">الدور: <span id="currentRound">1</span>/13</div>
+        </div>
+
+        <div class="scorecard-container">
+            <div class="scorecard-grid" id="scorecardGrid">
+                <div class="score-item category-name-cell" style="font-weight:bold; background-color: #fed7aa;">الفئة</div>
+                <div class="score-item category-name-cell player1" style="font-weight:bold; background-color: var(--player1-color); color:white;">لاعب 1</div>
+                <div class="score-item category-name-cell player2" style="font-weight:bold; background-color: var(--player2-color); color:white;">لاعب 2</div>
+            </div>
+            <div class="bonus-section">
+                 <div class="bonus-header">الجزء العلوي</div>
+                 <div class="bonus-player-section" id="player1BonusArea">
+                    <div>لاعب 1: <span id="upperScoreSumP1">0</span>/63</div>
+                    <div>مكافأة: <span id="bonusValueP1">0</span></div>
+                    <div>إجمالي علوي: <span id="upperTotalP1">0</span></div>
+                 </div>
+                 <div class="bonus-player-section" id="player2BonusArea">
+                    <div>لاعب 2: <span id="upperScoreSumP2">0</span>/63</div>
+                    <div>مكافأة: <span id="bonusValueP2">0</span></div>
+                    <div>إجمالي علوي: <span id="upperTotalP2">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dice-area" id="diceArea"></div>
+
+        <div class="roll-play-area">
+            <button id="rollButton">ROLL</button>
+            <div class="roll-counts">
+                <div class="roll-count-indicator" id="rollCount1">1</div>
+                <div class="roll-count-indicator" id="rollCount2">2</div>
+                <div class="roll-count-indicator" id="rollCount3">3</div>
+            </div>
+            <button id="playButton" disabled>PLAY</button>
+        </div>
+
+        <div class="total-score-display-container">
+            <div class="player-total-score player1" id="player1TotalDisplay">لاعب 1: <span id="grandTotalScoreP1">0</span></div>
+            <div class="player-total-score player2" id="player2TotalDisplay">لاعب 2: <span id="grandTotalScoreP2">0</span></div>
+        </div>
+        <div id="finalMessage"></div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        // (نفس عناصر DOM من الإصدار السابق)
+        const scorecardGrid = document.getElementById('scorecardGrid');
+        const diceArea = document.getElementById('diceArea');
+        const rollButton = document.getElementById('rollButton');
+        const playButton = document.getElementById('playButton');
+        const rollCountIndicators = [document.getElementById('rollCount1'), document.getElementById('rollCount2'), document.getElementById('rollCount3')];
+        const currentPlayerTurnDisplay = document.getElementById('currentPlayerTurn');
+        const currentRoundDisplay = document.getElementById('currentRound');
+        const upperScoreSumP1Display = document.getElementById('upperScoreSumP1');
+        const bonusValueP1Display = document.getElementById('bonusValueP1');
+        const upperTotalP1Display = document.getElementById('upperTotalP1');
+        const grandTotalScoreP1Display = document.getElementById('grandTotalScoreP1');
+        const upperScoreSumP2Display = document.getElementById('upperScoreSumP2');
+        const bonusValueP2Display = document.getElementById('bonusValueP2');
+        const upperTotalP2Display = document.getElementById('upperTotalP2');
+        const grandTotalScoreP2Display = document.getElementById('grandTotalScoreP2');
+        const finalMessageDisplay = document.getElementById('finalMessage');
+        const exitBtn = document.getElementById('exitBtn');
+        const player1TotalDisplay = document.getElementById('player1TotalDisplay');
+        const player2TotalDisplay = document.getElementById('player2TotalDisplay');
+
+
+        // --- Audio Synths (Tone.js) ---
+        let synth, diceRollSynth, bonusSynth;
+        let audioInitialized = false;
+
+        function initializeAudio() {
+            if (audioInitialized) return;
+            try {
+                Tone.start(); // مهم لسياسات التشغيل التلقائي في المتصفحات
+                synth = new Tone.Synth({
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.1 }
+                }).toDestination();
+
+                diceRollSynth = new Tone.NoiseSynth({
+                    noise: { type: 'white' },
+                    envelope: { attack: 0.005, decay: 0.15, sustain: 0 }
+                }).toDestination();
+                diceRollSynth.volume.value = -10; // تقليل صوت رمي النرد
+
+                bonusSynth = new Tone.PolySynth(Tone.Synth, {
+                     oscillator: { type: "triangle" },
+                     envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.4 }
+                }).toDestination();
+                bonusSynth.volume.value = -8;
+
+                audioInitialized = true;
+                console.log("Audio initialized successfully.");
+            } catch (e) {
+                console.error("Error initializing audio:", e);
+            }
+        }
+        // استدعاء تهيئة الصوت عند أول تفاعل للمستخدم (مثلاً عند بدء اللعبة)
+
+        // --- Game State ---
+        // (نفس حالة اللعبة من الإصدار السابق)
+        let diceValues = [1,1,1,1,1]; let heldDice = [false,false,false,false,false];
+        let rollsLeft = 3; let currentRound = 1; let currentPlayer = 1;
+        const MAX_ROUNDS = 13; let selectedCategoryForPlay = null;
+        const categoryDefinitions = {'ones':{name:'1',icon:'fas fa-dice-one',section:'upper'},'twos':{name:'2',icon:'fas fa-dice-two',section:'upper'},'threes':{name:'3',icon:'fas fa-dice-three',section:'upper'},'fours':{name:'4',icon:'fas fa-dice-four',section:'upper'},'fives':{name:'5',icon:'fas fa-dice-five',section:'upper'},'sixes':{name:'6',icon:'fas fa-dice-six',section:'upper'},'three_of_a_kind':{name:'3X',section:'lower'},'four_of_a_kind':{name:'4X',section:'lower'},'full_house':{name:'🏠',section:'lower'},'small_straight':{name:'SMALL',section:'lower'},'large_straight':{name:'LARGE',section:'lower'},'yatzy':{name:'YATZY',section:'lower'},'chance':{name:'؟',section:'lower'}};
+        let playerScores = [{},{}];
+        let yatzyBonusAvailable = [false,false]; let yatzyCount = [0,0];
+
+
+        function initializePlayerData() { /* ... نفس الدالة ... */
+            playerScores=[{},{}];for(let i=0;i<2;i++)for(const key in categoryDefinitions)playerScores[i][key]={score:0,scored:false,potential:0,element:null};
+        }
+        function initializeGame() { /* ... نفس الدالة مع إضافة تهيئة الصوت ... */
+             if (!audioInitialized) {
+                // محاولة تهيئة الصوت هنا، أو تأجيلها لأول نقرة فعلية
+                // أفضل عند أول نقرة لتجنب مشاكل التشغيل التلقائي
+            }
+            diceValues=[1,1,1,1,1];heldDice.fill(false);rollsLeft=3;currentRound=1;currentPlayer=1;selectedCategoryForPlay=null;
+            yatzyBonusAvailable=[false,false];yatzyCount=[0,0];initializePlayerData();createDiceElements();renderScorecard();
+            updateRollUI();updateAllTotals();finalMessageDisplay.style.display='none';rollButton.disabled=false;playButton.disabled=true;
+            updateCurrentPlayerDisplay();
+        }
+
+        function createDiceElements() { /* ... نفس الدالة ... */
+            diceArea.innerHTML='';for(let i=0;i<5;i++){const dieDiv=document.createElement('div');dieDiv.classList.add('die');dieDiv.dataset.index=i;const icon=document.createElement('i');icon.className=`fas fa-dice-${['one','two','three','four','five','six'][diceValues[i]-1]}`;dieDiv.appendChild(icon);dieDiv.addEventListener('click',()=>{toggleHold(i);playSound('click');});diceArea.appendChild(dieDiv);}updateDiceVisuals();
+        }
+        function updateDiceVisuals() { /* ... نفس الدالة ... */
+            const dieDivs=diceArea.querySelectorAll('.die');dieDivs.forEach((dieDiv,i)=>{const icon=dieDiv.querySelector('i');icon.className=`fas fa-dice-${['one','two','three','four','five','six'][diceValues[i]-1]}`;heldDice[i]?dieDiv.classList.add('held'):dieDiv.classList.remove('held');});
+        }
+
+        function renderScorecard() { /* ... نفس الدالة تقريباً، مع تعديل طفيف للتفاعل ... */
+            const gridChildren=Array.from(scorecardGrid.children);scorecardGrid.innerHTML='';gridChildren.slice(0,3).forEach(header=>scorecardGrid.appendChild(header));
+            Object.keys(categoryDefinitions).forEach(key=>{const categoryDef=categoryDefinitions[key];const nameCell=document.createElement('div');nameCell.classList.add('score-item','category-name-cell');nameCell.dataset.key=key;if(categoryDef.icon){const iconEl=document.createElement('i');iconEl.className=categoryDef.icon;nameCell.appendChild(iconEl);}nameCell.appendChild(document.createTextNode(" "+categoryDef.name));scorecardGrid.appendChild(nameCell);
+            for(let i=0;i<2;i++){const playerScoreCell=document.createElement('div');playerScoreCell.classList.add('score-item','player-score-cell');playerScoreCell.dataset.key=key;playerScoreCell.dataset.player=i+1;playerScores[i][key].element=playerScoreCell;
+            if(playerScores[i][key].scored){playerScoreCell.textContent=playerScores[i][key].score;playerScoreCell.classList.add('scored');}else{playerScoreCell.classList.add('potential');
+            if(i===currentPlayer-1&&rollsLeft<3){const potential=playerScores[i][key].potential;playerScoreCell.innerHTML=`<span class="potential-score-text">${potential>0?potential:'0'}</span>`;}else{playerScoreCell.innerHTML='<span class="potential-score-text">-</span>';}
+            playerScoreCell.addEventListener('click',()=>{selectCategoryForPlay(key,i+1);playSound('select');});}
+            if(key===selectedCategoryForPlay&&i===currentPlayer-1&&!playerScores[i][key].scored){playerScoreCell.classList.add('selected-for-play');}scorecardGrid.appendChild(playerScoreCell);}});
+        }
+        
+        function rollDice() {
+            if (!audioInitialized) initializeAudio(); // تهيئة الصوت عند أول رمية إذا لم يتم بعد
+            if (rollsLeft <= 0) return;
+            playSound('roll');
+            // إضافة كلاس للأنيميشن
+            const diceElements = diceArea.querySelectorAll('.die');
+            diceElements.forEach((die, i) => {
+                if (!heldDice[i]) {
+                    die.classList.add('rolling');
+                    // إزالة الكلاس بعد انتهاء الأنيميشن
+                    setTimeout(() => die.classList.remove('rolling'), 300);
+                }
+            });
+
+            // تأخير تغيير قيم النرد قليلاً ليتزامن مع الأنيميشن
+            setTimeout(() => {
+                for (let i = 0; i < 5; i++) { if (!heldDice[i]) diceValues[i] = Math.floor(Math.random() * 6) + 1; }
+                rollsLeft--;
+                selectedCategoryForPlay = null; playButton.disabled = true;
+                updateDiceVisuals(); updateRollUI(); calculateAllPotentialScoresForCurrentPlayer(); renderScorecard();
+            }, 150); // نصف مدة الأنيميشن تقريباً
+        }
+
+        function toggleHold(index) { /* ... نفس الدالة (الصوت يضاف في createDiceElements) ... */
+            if(rollsLeft===3&&!heldDice.some(h=>h)){alert("ارمِ النرد مرة واحدة على الأقل قبل التثبيت.");return;}
+            if(rollsLeft>0||(rollsLeft===0&&!playButton.disabled)){heldDice[index]=!heldDice[index];updateDiceVisuals();calculateAllPotentialScoresForCurrentPlayer();renderScorecard();}
+        }
+        
+        function calculateAllPotentialScoresForCurrentPlayer() { /* ... نفس الدالة ... */
+            const playerIdx=currentPlayer-1;for(const key in categoryDefinitions)if(!playerScores[playerIdx][key].scored)playerScores[playerIdx][key].potential=calculateScore(key,diceValues);
+        }
+        function calculateScore(categoryKey, dice) { /* ... نفس الدالة ... */
+            const counts=Array(7).fill(0);dice.forEach(val=>counts[val]++);let sum=dice.reduce((s,v)=>s+v,0);
+            switch(categoryKey){case 'ones':return counts[1]*1;case 'twos':return counts[2]*2;case 'threes':return counts[3]*3;case 'fours':return counts[4]*4;case 'fives':return counts[5]*5;case 'sixes':return counts[6]*6;case 'three_of_a_kind':for(let i=1;i<=6;i++)if(counts[i]>=3)return sum;return 0;case 'four_of_a_kind':for(let i=1;i<=6;i++)if(counts[i]>=4)return sum;return 0;case 'full_house':const three=counts.some(c=>c===3);const two=counts.some(c=>c===2);if((three&&two)||counts.some(c=>c===5))return 25;return 0;case 'small_straight':const ud=[...new Set(dice)].sort((a,b)=>a-b).join('');if(ud.includes("1234")||ud.includes("2345")||ud.includes("3456"))return 30;return 0;case 'large_straight':const su=[...new Set(dice)].sort((a,b)=>a-b).join('');if(su==="12345"||su==="23456")return 40;return 0;case 'yatzy':for(let i=1;i<=6;i++)if(counts[i]===5)return 50;return 0;case 'chance':return sum;default:return 0;}
+        }
+
+        function selectCategoryForPlay(categoryKey, playerIdxClicked) { /* ... نفس الدالة (الصوت يضاف في renderScorecard) ... */
+            if(playerIdxClicked!==currentPlayer){alert("ليس دورك لاختيار هذه الخانة!");return;}
+            const playerIdx=currentPlayer-1;if(playerScores[playerIdx][categoryKey].scored)return;
+            if(rollsLeft===3&&heldDice.every(h=>!h)){alert("ارمِ النرد أولاً أو ثبّت بعض النرد!");return;}
+            selectedCategoryForPlay=categoryKey;playButton.disabled=false;renderScorecard();
+        }
+
+        function playSelectedCategory() {
+            if (!selectedCategoryForPlay) return;
+            playSound('confirm'); // صوت تأكيد تسجيل النقاط
+            const playerIdx = currentPlayer - 1;
+            if (playerScores[playerIdx][selectedCategoryForPlay].scored) return;
+
+            const scoreValue = calculateScore(selectedCategoryForPlay, diceValues);
+            playerScores[playerIdx][selectedCategoryForPlay].score = scoreValue;
+            playerScores[playerIdx][selectedCategoryForPlay].scored = true;
+
+            const currentRollIsYatzy = calculateScore('yatzy', diceValues) === 50;
+            if (currentRollIsYatzy) {
+                playSound('yatzy'); // صوت خاص للياتزي
+                yatzyCount[playerIdx]++;
+                if (yatzyCount[playerIdx] === 1 && selectedCategoryForPlay === 'yatzy' && scoreValue === 50) {
+                    yatzyBonusAvailable[playerIdx] = true;
+                } else if (yatzyBonusAvailable[playerIdx] && playerScores[playerIdx].yatzy.score === 50) {
+                    alert(`لاعب ${currentPlayer}: مكافأة ياتزي! +100 نقطة.`);
+                    playSound('bonus'); // صوت للمكافأة
+                } else if (yatzyCount[playerIdx] > 0 && selectedCategoryForPlay === 'yatzy' && scoreValue === 0 && playerScores[playerIdx].yatzy.scored) {
+                    yatzyBonusAvailable[playerIdx] = false;
+                }
+            }
+            nextTurn();
+        }
+
+        function updateAllTotals() { /* ... نفس الدالة ... */
+            for(let i=0;i<2;i++){let upperSum=0;['ones','twos','threes','fours','fives','sixes'].forEach(key=>{if(playerScores[i][key].scored)upperSum+=playerScores[i][key].score;});const bonus=upperSum>=63?35:0;const upperTotal=upperSum+bonus;let lowerSum=0;['three_of_a_kind','four_of_a_kind','full_house','small_straight','large_straight','yatzy','chance'].forEach(key=>{if(playerScores[i][key].scored)lowerSum+=playerScores[i][key].score;});let totalYatzyBonus=0;if(playerScores[i].yatzy.scored&&playerScores[i].yatzy.score===50&&yatzyCount[i]>1){totalYatzyBonus=(yatzyCount[i]-1)*100;}const grandTotal=upperTotal+lowerSum+totalYatzyBonus;
+            if(i===0){upperScoreSumP1Display.textContent=upperSum;bonusValueP1Display.textContent=bonus;upperTotalP1Display.textContent=upperTotal;grandTotalScoreP1Display.textContent=grandTotal;}else{upperScoreSumP2Display.textContent=upperSum;bonusValueP2Display.textContent=bonus;upperTotalP2Display.textContent=upperTotal;grandTotalScoreP2Display.textContent=grandTotal;}}}
+
+        function nextTurn() { /* ... نفس الدالة ... */
+            if(currentPlayer===2){currentRound++;currentPlayer=1;}else{currentPlayer=2;}
+            if(currentRound>MAX_ROUNDS){endGame();}else{rollsLeft=3;heldDice.fill(false);selectedCategoryForPlay=null;updateDiceVisuals();calculateAllPotentialScoresForCurrentPlayer();renderScorecard();updateRollUI();updateCurrentPlayerDisplay();playButton.disabled=true;rollButton.disabled=false;alert(`دور اللاعب ${currentPlayer}!`);}
+            updateAllTotals();
+        }
+        function updateCurrentPlayerDisplay() { /* ... نفس الدالة ... */
+            currentPlayerTurnDisplay.textContent=`دور اللاعب ${currentPlayer}`;currentPlayerTurnDisplay.className=`current-player-display player${currentPlayer}`;
+             // تظليل إجمالي نقاط اللاعب الحالي
+            player1TotalDisplay.style.boxShadow = currentPlayer === 1 ? '0 0 8px var(--player1-color)' : '0 1px 3px rgba(0,0,0,0.1)';
+            player2TotalDisplay.style.boxShadow = currentPlayer === 2 ? '0 0 8px var(--player2-color)' : '0 1px 3px rgba(0,0,0,0.1)';
+        }
+        function updateRollUI() { /* ... نفس الدالة ... */
+            currentRoundDisplay.parentElement.querySelector('#currentRound').textContent=`${currentRound}`;rollCountIndicators.forEach((indicator,i)=>{indicator.classList.remove('active');indicator.style.backgroundColor='rgba(255,255,255,0.25)';indicator.style.color='var(--button-text)';if(i<3-rollsLeft)indicator.style.backgroundColor='rgba(0,0,0,0.2)';});if(rollsLeft>0&&rollsLeft<=3){const activeIdx=3-rollsLeft;if(rollCountIndicators[activeIdx]){rollCountIndicators[activeIdx].classList.add('active');rollCountIndicators[activeIdx].style.backgroundColor='var(--button-text)';rollCountIndicators[activeIdx].style.color='var(--button-bg)';}}rollButton.disabled=(rollsLeft===0);
+        }
+        function endGame() { /* ... نفس الدالة ... */
+            rollButton.disabled=true;playButton.disabled=true;const scoreP1=parseInt(grandTotalScoreP1Display.textContent);const scoreP2=parseInt(grandTotalScoreP2Display.textContent);let winnerMessage="";if(scoreP1>scoreP2)winnerMessage=`لاعب 1 يفوز بنتيجة ${scoreP1} مقابل ${scoreP2}!`;else if(scoreP2>scoreP1)winnerMessage=`لاعب 2 يفوز بنتيجة ${scoreP2} مقابل ${scoreP1}!`;else winnerMessage=`تعادل بنتيجة ${scoreP1}!`;finalMessageDisplay.textContent=`انتهت اللعبة! ${winnerMessage}`;finalMessageDisplay.style.display='block';playSound('gameOver');scorecardGrid.querySelectorAll('.score-item').forEach(item=>{const new_element=item.cloneNode(true);item.parentNode.replaceChild(new_element,item);new_element.style.cursor='default';new_element.classList.remove('potential','selected-for-play');new_element.style.outline='none';});
+        }
+
+        function playSound(type) {
+            if (!audioInitialized || !Tone) return;
+            try {
+                if (type === 'roll' && diceRollSynth) {
+                    diceRollSynth.triggerAttackRelease("8n", Tone.now());
+                } else if (type === 'click' && synth) {
+                    synth.triggerAttackRelease("C5", "16n", Tone.now());
+                } else if (type === 'select' && synth) {
+                    synth.triggerAttackRelease("E5", "16n", Tone.now() + 0.05);
+                } else if (type === 'confirm' && synth) {
+                    synth.triggerAttackRelease("G5", "8n", Tone.now());
+                } else if (type === 'yatzy' && bonusSynth) {
+                    bonusSynth.triggerAttackRelease(["C4", "E4", "G4", "C5"], "4n", Tone.now());
+                } else if (type === 'bonus' && bonusSynth) {
+                    bonusSynth.triggerAttackRelease(["E4", "G4", "C5"], "8n", Tone.now());
+                } else if (type === 'gameOver' && bonusSynth) {
+                    bonusSynth.triggerAttackRelease(["C4", "G3", "E3", "C3"], "2n", Tone.now());
+                }
+            } catch (e) {
+                console.error("Error playing sound:", type, e);
+            }
+        }
+
+        // --- Event Listeners ---
+        rollButton.addEventListener('click', rollDice);
+        playButton.addEventListener('click', playSelectedCategory);
+        exitBtn.addEventListener('click', () => { if(confirm("هل أنت متأكد؟ ستبدأ لعبة جديدة.")) { playSound('click'); initializeGame(); } });
+        // تهيئة الصوت عند أول تفاعل عام (مثل النقر في أي مكان لبدء اللعبة)
+        document.body.addEventListener('click', () => { if (!audioInitialized) initializeAudio(); }, { once: true });
+
+
+        // --- Initial Load ---
+        initializeGame();
+    </script>
+</body>
+</html>
